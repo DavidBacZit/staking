@@ -56,7 +56,6 @@
     const showStatus = (msg, type='danger') => {
       const el = qs('statusMessage'); el.textContent = msg; el.className = `alert alert-${type} text-center`; el.style.display = 'block';
     };
-    const hideStatus = () => qs('statusMessage').style.display = 'none';
 
     if (typeof ethers === 'undefined') alert('Ethers.js not loaded.');
 
@@ -95,7 +94,6 @@
         qs('accountDisplay').textContent = `Connected: ${await signer.getAddress()}`;
         qs('stakeBtn').disabled = false;
         qs('unstakeBtn').disabled = false;
-        hideStatus();
         await updateData();
       } catch (err) { showStatus(err.message); }
     }
@@ -138,7 +136,7 @@
         const underlying = await tokenContract.balanceOf(STAKING_ADDRESS);
         let rate = '–';
         if (!underlying.isZero()) {
-          rate = (parseFloat(ethers.utils.formatUnits(stSupply, 18)) / parseFloat(ethers.utils.formatUnits(underlying, 18))).toFixed(6);
+          rate = (parseFloat(ethers.utils.formatUnits(underlying, 18)) / parseFloat(ethers.utils.formatUnits(stSupply, 18))).toFixed(6);
         }
         qs('rateDisplay').textContent = rate;
         const bal = await tokenContract.balanceOf(user);
