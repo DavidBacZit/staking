@@ -37,8 +37,100 @@
     </div>
   </div>
 
-  <!-- Use UMD build to avoid 'export' syntax errors -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.umd.min.js"></script>
+    <!-- Ethers.js UMD bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5/dist/ethers.umd.min.js"></script>
+  <script>
+    const qs = id => document.getElementById(id);
+    const showStatus = (msg, type='danger') => {
+      const el = qs('statusMessage');
+      el.textContent = msg;
+      el.className = `alert alert-${type} text-center`;
+      el.style.display = 'block';
+    };
+    const hideStatus = () => qs('statusMessage').style.display = 'none';
+    if (typeof ethers === 'undefined') {
+      alert('Ethers.js is not loaded. Please check the script src.');
+    }
+
+    const TOKEN_ADDRESS = '0xYourTokenAddress';
+    const STAKING_ADDRESS = '0xYourStakingContractAddress';
+    const CHAIN_ID = 1;
+    const ERC20_ABI = [
+      'function balanceOf(address) view returns (uint256)',
+      'function approve(address,uint256) returns(bool)'
+    ];
+    const STAKING_ABI = [
+      'function stake(uint256) external',
+      'function balanceOf(address) view returns (uint256)',
+      'function totalSupply() view returns (uint256)'
+    ];
+
+    let provider, signer, tokenContract, stakingContract;
+
+    async function connectWallet() {
+      try {
+        if (!window.ethereum) throw new Error('Please install MetaMask');
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send('eth_requestAccounts', []);
+        signer = provider.getSigner();
+        const network = await provider.getNetwork();
+        if (network.chainId !== CHAIN_ID) {
+          await provider.send('wallet_switchEthereumChain', [{ chainId: `0x${CHAIN_ID.toString(16)}` }]);
+        }
+        tokenContract = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, signer);
+        stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+        const account = await signer.getAddress();
+        qs('accountDisplay').textContent = `Connected: ${account}`;
+        qs('approveBtn').disabled = false;
+        qs('stakeBtn').disabled = false;
+        hideStatus();
+        await updateData();
+      } catch (err) {
+        showStatus(err.message);
+      }
+    }
+
+    async function approve() {
+      try {
+        const amt = qs('stakeAmount').value;
+        if (!amt || parseFloat(amt) <= 0) throw new Error('Enter a valid amount');
+        showStatus('Approving...', 'info');
+        const tx = await tokenContract.approve(STAKING_ADDRESS, ethers.utils.parseUnits(amt, 18));
+        await tx.wait();
+        showStatus('Approved successfully!', 'success');
+        setTimeout(hideStatus, 2000);
+      } catch (err) {
+        showStatus(err.message);
+      }
+    }
+
+    async function stake() {
+      try {
+        const amt = qs('stakeAmount').value;
+        if (!amt || parseFloat(amt) <= 0) throw new Error('Enter a valid amount');
+        showStatus('Staking...', 'info');
+        const tx = await stakingContract.stake(ethers.utils.parseUnits(amt, 18));
+        await tx.wait();
+        showStatus('Staked successfully!', 'success');
+        await updateData();
+      } catch (err) {
+        showStatus(err.message);
+      }
+    }
+
+    async function updateData() {
+      try {
+        const user = await signer.getAddress();
+        const bal = await stakingContract.balanceOf(user);
+        qs('rateDisplay').textContent = '1';
+        qs('balanceDisplay').textContent = ethers.utils.formatUnits(bal, 18);
+      } catch {}
+    }
+
+    qs('connectBtn').addEventListener('click', connectWallet);
+    qs('approveBtn').addEventListener('click', approve);
+    qs('stakeBtn').addEventListener('click', stake);
+  </script>
   <script>
     const qs = id => document.getElementById(id);
     const showStatus = (msg, type='danger') => {
