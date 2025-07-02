@@ -44,10 +44,17 @@
 
     if (typeof ethers === 'undefined') alert('Ethers.js not loaded.');
 
-    
-    const TOKEN_ADDRESS = '0x9C022d8A3faC22449D55eB2f0c26aE98b69B3c87';
-    const STAKING_ADDRESS = '0xECDbD7cba468BBBe6A86aeaAFB230E06fe8bbaCb';
-    const CHAIN_ID = 1;
+    const TOKEN_ADDRESS = '0xYourTokenAddress';
+    const STAKING_ADDRESS = '0xYourStakingContractAddress';
+    const CHAIN_ID = 10143;
+    const CHAIN_HEX = '0x' + CHAIN_ID.toString(16);
+    const CHAIN_PARAMS = {
+      chainId: CHAIN_HEX,
+      chainName: 'Monad Testnet',
+      nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+      rpcUrls: ['https://testnet-rpc.monad.xyz'],
+      blockExplorerUrls: []
+    };
     const ERC20_ABI = [
       'function balanceOf(address) view returns (uint256)',
       'function allowance(address,address) view returns (uint256)',
@@ -63,13 +70,17 @@
 
     async function connectWallet() {
       try {
-        if (!window.ethereum) throw new Error('Install MetaMask');
+        if (!window.ethereum) throw new Error('Please install MetaMask');
         provider = new ethers.providers.Web3Provider(window.ethereum);
         await provider.send('eth_requestAccounts', []);
         signer = provider.getSigner();
         const network = await provider.getNetwork();
         if (network.chainId !== CHAIN_ID) {
-          await provider.send('wallet_switchEthereumChain', [{ chainId: `0x${CHAIN_ID.toString(16)}` }]);
+          try {
+            await provider.send('wallet_switchEthereumChain', [{ chainId: CHAIN_HEX }]);
+          } catch (switchError) {
+            await provider.send('wallet_addEthereumChain', [CHAIN_PARAMS]);
+          }
         }
         tokenContract = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, signer);
         stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
@@ -85,7 +96,7 @@
     async function stake() {
       try {
         const amt = qs('stakeAmount').value;
-        if (!amt || parseFloat(amt) <= 0) throw new Error('Enter valid amount');
+        if (!amt || parseFloat(amt) <= 0) throw new Error('Enter a valid amount');
         showStatus('Checking allowance...', 'info');
         const amountBN = ethers.utils.parseUnits(amt, 18);
         const owner = await signer.getAddress();
