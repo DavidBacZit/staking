@@ -60,8 +60,8 @@
 
     if (typeof ethers === 'undefined') alert('Ethers.js not loaded.');
 
-    const TOKEN_ADDRESS = '0x9C022d8A3faC22449D55eB2f0c26aE98b69B3c87';
-    const STAKING_ADDRESS = '0x1BcA2E8300B56E6aD35a130873DaD6681fB37111';
+    const TOKEN_ADDRESS = '0xYourTokenAddress';
+    const STAKING_ADDRESS = '0xYourStakingContractAddress';
     const CHAIN_ID = 10143;
     const CHAIN_HEX = '0x' + CHAIN_ID.toString(16);
     const CHAIN_PARAMS = { chainId: CHAIN_HEX, chainName: 'Monad Testnet', nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 }, rpcUrls: ['https://testnet-rpc.monad.xyz'], blockExplorerUrls: [] };
@@ -134,13 +134,21 @@
     async function updateData() {
       try {
         const user = await signer.getAddress();
-        const bal = await stakingContract.balanceOf(user);
+        const stSupply = await stakingContract.totalSupply();
+        const underlying = await tokenContract.balanceOf(STAKING_ADDRESS);
+        let rate = '–';
+        if (!underlying.isZero()) {
+          rate = (parseFloat(ethers.utils.formatUnits(stSupply, 18)) / parseFloat(ethers.utils.formatUnits(underlying, 18))).toFixed(6);
+        }
+        qs('rateDisplay').textContent = rate;
+        const bal = await tokenContract.balanceOf(user);
         qs('balanceDisplay').textContent = ethers.utils.formatUnits(bal, 18);
-        qs('unstakeBalanceDisplay').textContent = ethers.utils.formatUnits(bal, 18);
-        qs('rateDisplay').textContent = '1';
-      } catch {}
+        const stBal = await stakingContract.balanceOf(user);
+        qs('unstakeBalanceDisplay').textContent = ethers.utils.formatUnits(stBal, 18);
+      } catch {}  
     }
 
+    // Event bindings
     qs('connectBtn').addEventListener('click', connectWallet);
     qs('stakeBtn').addEventListener('click', stake);
     qs('unstakeBtn').addEventListener('click', unstake);
