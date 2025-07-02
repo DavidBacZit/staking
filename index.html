@@ -2,165 +2,178 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Staking dApp</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.min.js"></script>
   <style>
     body {
-      background-color: #f8f9fa;
+      background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 20px;
     }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    .card-stake {
+      border-radius: 1rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     }
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .form-group {
-      margin-bottom: 15px;
-    }
-    #statusMessage {
-      margin-top: 10px;
-      text-align: center;
+    .spinner-border-sm {
+      width: 1rem;
+      height: 1rem;
+      border-width: .15em;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Staking dApp</h1>
-    <button id="connectBtn" class="btn btn-primary w-100 mb-3">Connect Wallet</button>
-    <div id="accountDisplay" class="text-center mb-3"></div>
-
-    <div class="form-group">
-      <input id="stakeAmount" type="number" class="form-control" placeholder="Amount to stake" step="0.1" />
-    </div>
-    <button id="approveBtn" class="btn btn-secondary w-100 mb-2" disabled>Approve</button>
-    <button id="stakeBtn" class="btn btn-success w-100 mb-3" disabled>Stake</button>
-
-    <div class="card">
-      <div class="card-body">
-        <p class="card-text">Current rate: <span id="rateDisplay">–</span> stToken per 1 Token</p>
-        <p class="card-text">Your stToken balance: <span id="balanceDisplay">–</span></p>
-      </div>
+  <div class="card card-stake p-4" style="max-width: 500px; width: 100%;">
+    <div class="text-center mb-4">
+      <h2 class="fw-bold">Stake Your Tokens</h2>
+      <p class="text-muted">Earn rewards by staking your tokens securely</p>
     </div>
 
-    <div id="statusMessage" class="text-danger"></div>
+    <button id="connectBtn" class="btn btn-primary w-100 mb-3">
+      <span id="connectSpinner" class="spinner-border spinner-border-sm me-2 d-none" role="status"></span>
+      Connect Wallet
+    </button>
+    <div id="accountDisplay" class="text-center text-truncate mb-3 fw-medium text-secondary"></div>
+
+    <div class="form-floating mb-3">
+      <input id="stakeAmount" type="number" class="form-control" placeholder="Amount" step="0.1">
+      <label for="stakeAmount">Amount to Stake</label>
+    </div>
+
+    <div class="d-flex gap-2 mb-3">
+      <button id="approveBtn" class="btn btn-outline-secondary flex-fill" disabled>
+        <span id="approveSpinner" class="spinner-border spinner-border-sm me-2 d-none" role="status"></span>
+        Approve
+      </button>
+      <button id="stakeBtn" class="btn btn-success flex-fill" disabled>
+        <span id="stakeSpinner" class="spinner-border spinner-border-sm me-2 d-none" role="status"></span>
+        Stake
+      </button>
+    </div>
+
+    <ul class="list-group mb-3">
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        Current Rate
+        <span id="rateDisplay">–</span>
+      </li>
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        Your stToken Balance
+        <span id="balanceDisplay">–</span>
+      </li>
+    </ul>
+
+    <div id="statusMessage" class="alert alert-danger text-center small py-2 d-none"></div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.min.js"></script>
   <script>
+    const qs = id => document.getElementById(id);
+    const showSpinner = id => qs(id).classList.remove('d-none');
+    const hideSpinner = id => qs(id).classList.add('d-none');
+    const showStatus = (msg, type='danger') => {
+      const el = qs('statusMessage');
+      el.textContent = msg;
+      el.className = `alert alert-${type} text-center small py-2`;
+      el.classList.remove('d-none');
+    };
+    const hideStatus = () => qs('statusMessage').classList.add('d-none');
+
     if (typeof ethers === 'undefined') {
-      alert('ethers.js failed to load. Please check your internet connection or try refreshing the page.');
+      alert('Ethers.js failed to load.');
     }
 
     const TOKEN_ADDRESS = '0xYourTokenAddress';
     const STAKING_ADDRESS = '0xYourStakingContractAddress';
     const CHAIN_ID = 1;
-    const RPC_URL = 'https://your-rpc-url';
 
     const ERC20_ABI = [
       'function balanceOf(address) view returns (uint256)',
       'function approve(address, uint256) returns (bool)'
     ];
     const STAKING_ABI = [
-      'function stake(uint256 amount) external',
+      'function stake(uint256) external',
       'function balanceOf(address) view returns (uint256)',
       'function totalSupply() view returns (uint256)'
     ];
 
-    let provider;
-    let signer;
-    let tokenContract;
-    let stakingContract;
+    let provider, signer, tokenContract, stakingContract;
 
     async function connectWallet() {
       try {
-        if (!window.ethereum) {
-          alert('Please install MetaMask to use this dApp.');
-          return;
-        }
+        showSpinner('connectSpinner');
+        if (!window.ethereum) throw new Error('MetaMask not installed');
         provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
+        await provider.send('eth_requestAccounts', []);
         signer = provider.getSigner();
         const network = await provider.getNetwork();
         if (network.chainId !== CHAIN_ID) {
-          await provider.send("wallet_switchEthereumChain", [{ chainId: `0x${CHAIN_ID.toString(16)}` }]);
+          await provider.send('wallet_switchEthereumChain', [{ chainId: `0x${CHAIN_ID.toString(16)}` }]);
         }
-
         tokenContract = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, signer);
         stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-
         const account = await signer.getAddress();
-        document.getElementById('accountDisplay').textContent = `Connected: ${account}`;
-        document.getElementById('approveBtn').disabled = false;
-        document.getElementById('stakeBtn').disabled = false;
+        qs('accountDisplay').textContent = `Connected: ${account}`;
+        qs('approveBtn').disabled = false;
+        qs('stakeBtn').disabled = false;
         await updateData();
-      } catch (error) {
-        console.error('Connection error:', error);
-        document.getElementById('statusMessage').textContent = `Connection error: ${error.message}`;
+        hideStatus();
+      } catch (err) {
+        showStatus(err.message);
+      } finally {
+        hideSpinner('connectSpinner');
       }
     }
 
     async function approve() {
       try {
-        const amount = document.getElementById('stakeAmount').value;
-        if (!amount || parseFloat(amount) <= 0) {
-          document.getElementById('statusMessage').textContent = "Please enter a valid amount";
-          return;
-        }
+        const amount = qs('stakeAmount').value;
+        if (!amount || parseFloat(amount) <= 0) throw new Error('Enter a valid amount');
         const amountBN = ethers.utils.parseUnits(amount, 18);
-        document.getElementById('statusMessage').textContent = "Approving...";
+        showSpinner('approveSpinner'); hideStatus();
         const tx = await tokenContract.approve(STAKING_ADDRESS, amountBN);
         await tx.wait();
-        document.getElementById('statusMessage').textContent = "Approved successfully";
-        setTimeout(() => document.getElementById('statusMessage').textContent = "", 3000);
-      } catch (error) {
-        console.error('Approve error:', error);
-        document.getElementById('statusMessage').textContent = `Approve error: ${error.message}`;
+        showStatus('Approved successfully', 'success');
+      } catch (err) {
+        showStatus(err.message);
+      } finally {
+        hideSpinner('approveSpinner');
+        setTimeout(hideStatus, 3000);
       }
     }
 
     async function stake() {
       try {
-        const amount = document.getElementById('stakeAmount').value;
-        if (!amount || parseFloat(amount) <= 0) {
-          document.getElementById('statusMessage').textContent = "Please enter a valid amount";
-          return;
-        }
+        const amount = qs('stakeAmount').value;
+        if (!amount || parseFloat(amount) <= 0) throw new Error('Enter a valid amount');
         const amountBN = ethers.utils.parseUnits(amount, 18);
-        document.getElementById('statusMessage').textContent = "Staking...";
+        showSpinner('stakeSpinner'); hideStatus();
         const tx = await stakingContract.stake(amountBN);
         await tx.wait();
-        document.getElementById('statusMessage').textContent = "Staked successfully";
-        setTimeout(() => document.getElementById('statusMessage').textContent = "", 3000);
+        showStatus('Staked successfully', 'success');
         await updateData();
-      } catch (error) {
-        console.error('Stake error:', error);
-        document.getElementById('statusMessage').textContent = `Stake error: ${error.message}`;
+      } catch (err) {
+        showStatus(err.message);
+      } finally {
+        hideSpinner('stakeSpinner');
+        setTimeout(hideStatus, 3000);
       }
     }
 
     async function updateData() {
       try {
-        if (!signer) return;
-        const userAddress = await signer.getAddress();
-        const userBalance = await stakingContract.balanceOf(userAddress);
-        const totalSupply = await stakingContract.totalSupply();
-        document.getElementById('rateDisplay').textContent = "1";
-        document.getElementById('balanceDisplay').textContent = ethers.utils.formatUnits(userBalance, 18);
-      } catch (error) {
-        console.error('Update data error:', error);
-      }
+        const user = await signer.getAddress();
+        const bal = await stakingContract.balanceOf(user);
+        qs('rateDisplay').textContent = '1';
+        qs('balanceDisplay').textContent = ethers.utils.formatUnits(bal, 18);
+      } catch {}
     }
 
-    document.getElementById('connectBtn').addEventListener('click', connectWallet);
-    document.getElementById('approveBtn').addEventListener('click', approve);
-    document.getElementById('stakeBtn').addEventListener('click', stake);
+    qs('connectBtn').addEventListener('click', connectWallet);
+    qs('approveBtn').addEventListener('click', approve);
+    qs('stakeBtn').addEventListener('click', stake);
   </script>
 </body>
 </html>
