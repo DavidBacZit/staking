@@ -36,6 +36,18 @@
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@5/dist/ethers.umd.min.js"></script>
   <script>
+    if (window.ethereum) {
+      window.ethereum.on('chainChanged', (chainId) => {
+        const current = parseInt(chainId, 16);
+        if (current !== CHAIN_ID) {
+          showStatus('Please switch to Monad Testnet (Chain ID 10143)', 'danger');
+        } else {
+          hideStatus();
+          updateData();
+        }
+      });
+    }
+<script>
     const qs = id => document.getElementById(id);
     const showStatus = (msg, type='danger') => {
       const el = qs('statusMessage'); el.textContent = msg; el.className = `alert alert-${type} text-center`; el.style.display = 'block';
@@ -44,8 +56,8 @@
 
     if (typeof ethers === 'undefined') alert('Ethers.js not loaded.');
 
-    const TOKEN_ADDRESS = '0x9C022d8A3faC22449D55eB2f0c26aE98b69B3c87';
-    const STAKING_ADDRESS = '0xECDbD7cba468BBBe6A86aeaAFB230E06fe8bbaCb';
+    const TOKEN_ADDRESS = '0xYourTokenAddress';
+    const STAKING_ADDRESS = '0xYourStakingContractAddress';
     const CHAIN_ID = 10143;
     const CHAIN_HEX = '0x' + CHAIN_ID.toString(16);
     const CHAIN_PARAMS = {
